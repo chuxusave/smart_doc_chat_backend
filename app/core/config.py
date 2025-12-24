@@ -5,16 +5,18 @@ from functools import lru_cache
 from urllib.parse import quote_plus  # 👈 必须导入这个，用于处理密码里的特殊字符
 from pydantic_settings import BaseSettings
 load_dotenv()
+
+BASE_DIR = os.getcwd() # 获取当前运行目录
 class Settings(BaseSettings):
     # --- 1. 基础配置 ---
     DASHSCOPE_API_KEY: str = os.getenv("DASHSCOPE_API_KEY")
     DASHSCOPE_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     HF_ENDPOINT: str = "https://hf-mirror.com"
     
-    # --- 2. 模型路径 ---
-    EMBEDDING_MODEL_PATH: str = "./models/bge-large-zh-v1.5/BAAI/bge-large-zh-v1___5"
-    RERANK_MODEL_PATH: str = "./models/bge-reranker-base/BAAI/bge-reranker-base"
-    
+     # --- 2. 模型路径 ---
+    EMBEDDING_MODEL_PATH: str = os.path.join(BASE_DIR, "models", "bge-large-zh-v1.5/BAAI/bge-large-zh-v1___5")
+    RERANK_MODEL_PATH: str = os.path.join(BASE_DIR, "models", "bge-reranker-base/BAAI/bge-reranker-base")
+   
     # --- 3. Qdrant 配置 ---
     QDRANT_URL: str = "http://localhost:6333"
     COLLECTION_NAME: str = "enterprise_knowledge_base_hybrid_v1"
@@ -45,7 +47,12 @@ class Settings(BaseSettings):
             f"{self.MYSQL_HOST}:{self.MYSQL_PORT}/"
             f"{self.MYSQL_DB}"
         )
-    
+    # --- 6. 文件存储配置  ---
+    # 存放在项目根目录下的 storage 文件夹
+    UPLOAD_DIR: str = os.path.join(os.getcwd(), "storage") 
+    # 对应的访问前缀 (Base URL)
+    # 如果在 Docker 或服务器跑，这里可能需要改成 "http://你的IP:8000"
+    API_BASE_URL: str = "http://localhost:8000"
     
 
     class Config:

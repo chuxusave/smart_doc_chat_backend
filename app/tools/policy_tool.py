@@ -55,7 +55,9 @@ async def lookup_policy_doc(query: str) -> str:
                 sources_info.append({
                     "file": base_name,
                     "page": metadata.get('page_label', '-'),
-                    "score": f"{n.score:.2f}"
+                    "score": f"{n.score:.2f}",
+                    "url": metadata.get("source_url"), 
+                    "type": metadata.get("source_type")
                 })
         if not valid_nodes:
             print(f"🛑 [RAG Tool] 所有文档得分均低于 {SCORE_THRESHOLD}，返回未找到。")

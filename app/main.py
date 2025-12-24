@@ -5,10 +5,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routers import router as api_router
 from app.utils.database import engine, Base
 from app.core.config import get_settings
+
 
 
 
@@ -18,6 +20,11 @@ os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 settings = get_settings()
+
+# 在此处立即创建目录 (在 StaticFiles 初始化之前)
+if not os.path.exists(settings.UPLOAD_DIR):
+    os.makedirs(settings.UPLOAD_DIR)
+    print(f"📁 已创建文件存储目录: {settings.UPLOAD_DIR}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -30,6 +37,7 @@ async def lifespan(app: FastAPI):
         
         # 2. 这里可以预加载模型 (可选，因为 Factory 是懒加载的)
         # ModelFactory.get_embed_model()
+      
         
     except Exception as e:
         print(f"❌ 启动初始化失败: {e}")
@@ -48,6 +56,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 🟢 3. 挂载静态文件目录
+# 这样访问 http://localhost:8000/static/文件名 就能下载了
+app.mount("/static", StaticFiles(directory=settings.UPLOAD_DIR), name="static")
 
 # 异常处理
 @app.exception_handler(RequestValidationError)
