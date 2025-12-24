@@ -118,21 +118,34 @@ async def chat_endpoint(
             ):
                 kind = event["event"]
                 # 🟢 2. 监听工具执行结束事件
-                if kind == "on_tool_end" and event["name"] == "lookup_policy_doc":
-                    try:
-                        # event['data']['output'] 是工具返回的字符串
-                        tool_output_str = event["data"].get("output")
-                        if tool_output_str:
-                            # 尝试解析 JSON
-                            output_json = json.loads(tool_output_str)
-                            
-                            # 如果包含了 sources 字段，提取出来
-                            if isinstance(output_json, dict) and "sources" in output_json:
-                                captured_sources = output_json["sources"]
-                                # 注意：我们不需要修改 output 给 LLM，
-                                # 因为现在的 LLM 很聪明，它会读 JSON 里的 content 字段
-                    except Exception as e:
-                        print(f"⚠️ 解析 Sources 失败: {e}")
+                if kind == "on_tool_end":
+                    # 打印日志方便调试
+                    print(f"🔧 Tool End: {event['name']}")
+                    
+                    # 仅处理文档检索工具的 Source
+                    if event["name"] == "lookup_policy_doc":
+                        try:
+                            tool_output_str = event["data"].get("output")
+                            # 🛡️ 防御性编程：判断是否为字符串且像 JSON
+                            if tool_output_str and isinstance(tool_output_str, str):
+                                # 尝试清洗可能存在的 Markdown 代码块标记 (```json ... ```)
+                                clean_str = tool_output_str.strip()
+                                if clean_str.startswith("```"):
+                                    clean_str = clean_str.strip("`").replace("json", "").strip()
+                                
+                                # 解析 JSON
+                                output_json = json.loads(clean_str)
+                                
+                                if isinstance(output_json, dict) and "sources" in output_json:
+                                    captured_sources = output_json["sources"]
+                                    print(f"✅ 捕获到 Sources: {len(captured_sources)} 个")
+                            else:
+                                print(f"⚠️ 工具输出格式异常: {type(tool_output_str)}")
+                                
+                        except json.JSONDecodeError:
+                            print(f"⚠️ 工具输出不是有效的 JSON (可能是报错信息): {tool_output_str}")
+                        except Exception as e:
+                            print(f"⚠️ 解析 Sources 未知错误: {e}")
                 # 3. 正常的 LLM 流式输出        
                 if kind == "on_chat_model_stream":
                     chunk = event["data"]["chunk"]
@@ -143,9 +156,9 @@ async def chat_endpoint(
             # 只有当确实检索到了来源时才发送
             if captured_sources:
                 # 按照前端协议：换行 + __SOURCES__ + 换行 + JSON
-                sources_str = "\n\n__SOURCES__\n" + json.dumps(captured_sources, ensure_ascii=False)
-                yield sources_str
-                
+                sources_payload = json.dumps(captured_sources, ensure_ascii=False)
+                yield f"\n\n__SOURCES__\n{sources_payload}"
+
             # 6. 保存历史到 Redis
             if full_response:
                 new_history = history_dicts + [

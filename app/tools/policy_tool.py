@@ -61,7 +61,11 @@ async def lookup_policy_doc(query: str) -> str:
                 })
         if not valid_nodes:
             print(f"🛑 [RAG Tool] 所有文档得分均低于 {SCORE_THRESHOLD}，返回未找到。")
-            return "系统提示：知识库中【没有找到】包含该问题答案的文档。请直接告诉用户未找到相关信息，不要编造。"        
+            # 👇 修改这里：返回 JSON 格式的提示，而不是纯文本
+            return json.dumps({
+                "content": "系统提示：知识库中没有找到包含该问题答案的文档。请直接告诉用户未找到。",
+                "sources": [] # 空列表
+            }, ensure_ascii=False)        
         
         # 4. 结果组装
         context_str = "\n\n".join([n.text for n in valid_nodes])
