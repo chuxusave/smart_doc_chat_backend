@@ -101,6 +101,7 @@ async def chat_endpoint(
     # 5. 定义流式生成器
     async def event_generator():
         full_response = ""
+        captured_sources = [] # 🟢  初始化容器，用于暂存来源信息
         langfuse_handler = CallbackHandler()
         
         try:
@@ -116,12 +117,35 @@ async def chat_endpoint(
                 }
             ):
                 kind = event["event"]
+                # 🟢 2. 监听工具执行结束事件
+                if kind == "on_tool_end" and event["name"] == "lookup_policy_doc":
+                    try:
+                        # event['data']['output'] 是工具返回的字符串
+                        tool_output_str = event["data"].get("output")
+                        if tool_output_str:
+                            # 尝试解析 JSON
+                            output_json = json.loads(tool_output_str)
+                            
+                            # 如果包含了 sources 字段，提取出来
+                            if isinstance(output_json, dict) and "sources" in output_json:
+                                captured_sources = output_json["sources"]
+                                # 注意：我们不需要修改 output 给 LLM，
+                                # 因为现在的 LLM 很聪明，它会读 JSON 里的 content 字段
+                    except Exception as e:
+                        print(f"⚠️ 解析 Sources 失败: {e}")
+                # 3. 正常的 LLM 流式输出        
                 if kind == "on_chat_model_stream":
                     chunk = event["data"]["chunk"]
                     if chunk.content:
                         yield chunk.content
                         full_response += chunk.content
-            
+            # 🟢 4. 在流结束后，追加 Sources 协议数据
+            # 只有当确实检索到了来源时才发送
+            if captured_sources:
+                # 按照前端协议：换行 + __SOURCES__ + 换行 + JSON
+                sources_str = "\n\n__SOURCES__\n" + json.dumps(captured_sources, ensure_ascii=False)
+                yield sources_str
+                
             # 6. 保存历史到 Redis
             if full_response:
                 new_history = history_dicts + [

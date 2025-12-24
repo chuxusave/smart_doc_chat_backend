@@ -4,6 +4,8 @@ from langchain.tools import tool
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from app.services.rag_engine import get_index
 from app.services.llm_factory import ModelFactory
+import os
+import json
 # 封装 Tools (工具):LangChain 的 @tool 装饰器非常关键，它会自动把函数的 docstring（注释）变成 Prompt 发给大模型，所以注释必须写得很清楚！
 @tool
 async def lookup_policy_doc(query: str) -> str:
@@ -27,7 +29,7 @@ async def lookup_policy_doc(query: str) -> str:
         nodes = await retriever.aretrieve(query)
         print(f"   检索到 {len(nodes)} 个文档。")
         
-        # 3. Rerank 逻辑
+        # 3. 重排序
         filtered_nodes = reranker.postprocess_nodes(nodes, query_str=query)
 
         # 分数截断逻辑
@@ -38,19 +40,37 @@ async def lookup_policy_doc(query: str) -> str:
         # 建议先设为 -1.0 或 0.0 进行测试。如果你希望它更严谨，设高一点（如 0.5）。
         SCORE_THRESHOLD = 0.0
         valid_nodes = []
+        sources_info = [] # 🟢 用于存储元数据
         for n in filtered_nodes:
             # 打印分数方便调试
             print(f"   Ref doc: {n.metadata.get('file_name')} | Score: {n.score}")
             if n.score is not None and n.score > SCORE_THRESHOLD:
                 valid_nodes.append(n)
+                # 🟢 提取元数据
+                metadata = n.metadata if n.metadata else {}
+                file_name = metadata.get('file_name', '未知文件')
+                # 简化文件名，只保留 basename
+                base_name = os.path.basename(file_name)
+                
+                sources_info.append({
+                    "file": base_name,
+                    "page": metadata.get('page_label', '-'),
+                    "score": f"{n.score:.2f}"
+                })
         if not valid_nodes:
             print(f"🛑 [RAG Tool] 所有文档得分均低于 {SCORE_THRESHOLD}，返回未找到。")
             return "系统提示：知识库中【没有找到】包含该问题答案的文档。请直接告诉用户未找到相关信息，不要编造。"        
         
         # 4. 结果组装
         context_str = "\n\n".join([n.text for n in valid_nodes])
+        # content 字段给 LLM 阅读，sources 字段我们将在 Router 层拦截
+        output_data = {
+            "content": f"【参考文档】：\n{context_str}",
+            "sources": sources_info
+        }
         # 这里返回的内容是给大模型看的，可以加一点提示
-        return f"【查到的参考文档】：\n{context_str}"
+        # return f"【查到的参考文档】：\n{context_str}"
+        return json.dumps(output_data, ensure_ascii=False)
         
     except Exception as e:
         return f"检索服务暂时不可用: {str(e)}"
