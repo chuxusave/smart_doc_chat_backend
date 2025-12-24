@@ -1,211 +1,211 @@
-📘 Smart Doc Chat - 企业级智能文档问答系统 (RAG Agent)
-这是一个基于 RAG (检索增强生成) 和 Agent (智能体) 架构的企业级问答系统。它支持非结构化文档检索 (PDF/Word) 和结构化数据查询 (SQL)，并集成了 Langfuse 全链路追踪。
+# 📘 Smart Doc Chat - 企业级 RAG 与 SQL 数据分析助手
 
-🛠 技术栈
-后端框架: FastAPI, Python 3.10+
+Smart Doc Chat 是一个基于 **RAG (检索增强生成)** 和 **Agent (智能体)** 架构的企业级问答系统后端。
 
-LLM 编排: LangChain, LlamaIndex
+它不仅支持对非结构化文档（PDF/Word）的深度检索，还具备 Text-to-SQL 能力，能够查询业务数据并自动决策生成前端可渲染的图表数据（Table/Line/Bar/Pie）。系统深度集成了 **Langfuse**，用于全链路追踪和 Prompt（提示词）的云端管理。
 
-向量数据库: Qdrant
+## ✨ 核心特性
 
-关系数据库: MySQL 8.0 (异步 SQLAlchemy)
+* **双路智能检索**:
+* **RAG 引擎**: 基于 LlamaIndex + Qdrant，支持混合检索（关键词 + 向量）和 BGE-Reranker 重排序。
+* **SQL Agent**: 基于 LangChain Tool Calling，能够执行 SQL 查询业务数据（如反馈表统计）。
 
-缓存/队列: Redis Stack
 
-对象存储: MinIO (用于 Langfuse 大数据存储)
+* **智能可视化决策**: LLM 输出包含 `<<CHART_DATA>>` 协议，自动根据数据特征选择最合适的图表类型。
+* **Prompt CMS**: 系统提示词和工具指令通过 Langfuse 平台动态管理，无需重启服务即可调整 AI 行为。
+* **异步高性能**: 基于 FastAPI + Async SQLAlchemy + Redis，支持后台文件处理任务。
+* **国产化模型适配**: 默认集成阿里云通义千问 (`qwen-max`) 和 BAAI 本地向量模型。
 
-可观测性: Langfuse v3 (基于 Clickhouse + Postgres)
+## 🛠 技术栈
 
-模型: Qwen-Max (通义千问), BGE-Large (Embedding), BGE-Reranker
+* **框架**: FastAPI, Python 3.10+
+* **LLM 编排**: LangChain (Agent), LlamaIndex (RAG)
+* **模型服务**: DashScope (Qwen-Max), HuggingFace (Local Embeddings)
+* **数据库**:
+* **Vector DB**: Qdrant (Docker)
+* **RDBMS**: MySQL 8.0 (Docker)
+* **Cache**: Redis (Docker)
 
-📂 目录结构
-Plaintext
 
-project_root/
-├── backend/                  # Python 后端代码
-│   ├── app/                  # 核心应用逻辑
-│   ├── models/               # 本地模型文件 (bge-large, reranker)
-│   ├── .env                  # 后端配置文件 (Key, DB连接等)
-│   └── requirements.txt      # Python 依赖
-│
-└── smart_doc_chat_docker/    # 基础设施 (Docker)
-    ├── docker-compose.yml    # 容器编排
-    ├── clickhouse_config.xml # Clickhouse 配置文件
-    └── .env                  # Docker 环境变量 (数据库初始密码等)
-🚀 部署指南 (从零开始)
-第一步：环境准备
-确保你的机器已安装：
+* **可观测性 & 配置**: Langfuse (Self-hosted)
 
-Docker & Docker Compose
+---
 
-Python 3.10+ (建议使用 Conda)
+## 🚀 快速开始
 
-Git
+### 1. 环境要求
 
-第二步：启动基础设施 (Docker)
-进入 Docker 配置目录并启动所有服务。
+* Docker & Docker Compose
+* Python 3.10+ (推荐使用 Conda)
+* Git
 
-Bash
+### 2. 启动基础设施 (Docker)
 
+项目依赖大量中间件，请优先启动 Docker 环境。
+
+```bash
 cd smart_doc_chat_docker
 
-# 1. 确保目录内有 clickhouse_config.xml (如果没有，请从备份找回)
-# 2. 启动服务
+# 1. 启动所有服务 (Qdrant, MySQL, Redis, MinIO, Langfuse, Clickhouse, Postgres)
 docker-compose up -d
 
-# 3. 检查状态 (确保所有容器都是 Up)
+# 2. 检查运行状态 (确保所有容器 status 为 Up)
 docker-compose ps
-注意端口映射：
 
-Langfuse: http://localhost:3333
+```
 
-MinIO 控制台: http://localhost:9011 (API: 9010)
+* **Langfuse 控制台**: http://localhost:3333
+* **Qdrant**: http://localhost:6333
+* **MySQL**: 端口 3307 (账号 root / 密码 mysql123)
 
-Redis UI: http://localhost:8001
+### 3. 初始化 Langfuse (关键步骤)
 
-MySQL: 宿主机端口 3307 (容器内 3306)
+由于代码中使用了 `langfuse.get_prompt()` 动态获取提示词，**必须**在 Langfuse 后台手动配置，否则 Agent 无法启动。
 
-Qdrant: 6333
+1. 访问 http://localhost:3333 注册账户并创建项目。
+2. 获取 **Public Key** and **Secret Key**。
+3. 点击左侧 **Prompts**，新建以下 2 个 Prompt：
 
-第三步：配置 Langfuse (关键)
-因为使用了新的 Docker 环境，Langfuse 是空的，必须手动初始化。
+#### Prompt 1: 核心系统提示词
 
-访问 http://localhost:3333 并注册账号。
+* **Name**: `rag-core-system`
+* **Type**: `chat`
+* **Content**: (复制 `app/core/prompts.py` 中的 `CORE_SYSTEM_TEMPLATE_RAW` 内容)
+* *注意：保留 `{{schema}}` 占位符，代码会自动填充。*
 
-创建一个新项目 (Project)。
 
-进入 Settings -> API Keys，生成 Public Key 和 Secret Key (稍后填入后端 .env)。
 
-导入提示词 (Prompts)：
+#### Prompt 2: SQL 结果处理指令
 
-进入左侧 Prompts，点击 New Prompt。
+* **Name**: `tool-sql-result-instruction`
+* **Type**: `text`
+* **Content**:
+```text
+查询执行成功。
 
-Prompt 1:
+【原始数据】
+{{tool_output}}
 
-Name: rag-core-system
+请根据以上数据：
+1. 分析数据特征，决定使用 bar(柱状图), line(折线图), pie(饼图) 还是 table(表格)。
+2. 严格遵守 System Prompt 中的 <<CHART_DATA>> JSON 格式输出。
+3. 给出简短的数据洞察。
 
-Content: (复制 backend/prompts.py 中的 CORE_SYSTEM_TEMPLATE_RAW 内容)
+```
 
-Prompt 2:
 
-Name: tool-sql-result-instruction
 
-Content: (复制 "查询执行成功...【原始数据】..." 等指令内容)
+### 4. 后端环境配置
 
-第四步：后端环境配置
-回到 backend 目录。
+回到项目根目录：
 
-1. 创建 Python 虚拟环境
-
-Bash
-
-cd ../backend
+```bash
+# 1. 创建虚拟环境
 conda create -n smart_doc_chat python=3.10
 conda activate smart_doc_chat
-2. 安装依赖
 
-Bash
-
+# 2. 安装依赖
 pip install -r requirements.txt
-(如果没有 requirements.txt，请参考文末附录手动安装)
 
-3. 下载本地模型
+```
 
-Bash
+### 5. 下载本地模型
 
-# 安装 HuggingFace CLI
+项目默认加载本地 Embedding 和 Reranker 模型，需下载到指定目录：
+
+```bash
+# 安装 huggingface 命令行工具
 pip install -U huggingface_hub
 
 # 设置国内镜像
 export HF_ENDPOINT=https://hf-mirror.com
 
-# 下载 Embedding 模型 (注意路径要和 config.py 一致)
-huggingface-cli download --resume-download BAAI/bge-large-zh-v1.5 --local-dir ./models/bge-large-zh-v1.5 --local-dir-use-symlinks False
+# 下载 BGE-Large Embedding
+huggingface-cli download --resume-download BAAI/bge-large-zh-v1.5 --local-dir ./models/bge-large-zh-v1.5/BAAI/bge-large-zh-v1___5 --local-dir-use-symlinks False
 
-# 下载 Reranker 模型
-huggingface-cli download --resume-download BAAI/bge-reranker-base --local-dir ./models/bge-reranker-base --local-dir-use-symlinks False
-4. 配置环境变量 (.env) 在 backend/ 目录下新建 .env 文件：
+# 下载 BGE-Reranker
+huggingface-cli download --resume-download BAAI/bge-reranker-base --local-dir ./models/bge-reranker-base/BAAI/bge-reranker-base --local-dir-use-symlinks False
 
-Ini, TOML
+```
 
-# --- 模型服务 ---
-DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxx  # 你的通义千问 Key
+### 6. 环境变量配置 (.env)
 
-# --- 数据库 (注意端口是 3307) ---
-MYSQL_USER=root
-MYSQL_PASSWORD=your_docker_password  # 必须与 docker 里的 MYSQL_ROOT_PASSWORD 一致
+在根目录下创建 `.env` 文件：
+
+```ini
+# --- 模型服务 (阿里云 DashScope) ---
+DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxx
+
+# --- Langfuse (从 http://localhost:3333 获取) ---
+LANGFUSE_PUBLIC_KEY=pk-lf-xxxxxxxx
+LANGFUSE_SECRET_KEY=sk-lf-xxxxxxxx
+LANGFUSE_HOST=http://localhost:3333
+
+# --- 数据库配置 (对应 Docker 设置) ---
+MYSQL_PASSWORD=mysql123
 MYSQL_HOST=localhost
 MYSQL_PORT=3307
 MYSQL_DB=rag_db
 
-# --- 基础设施 ---
+# --- 中间件 ---
 REDIS_HOST=localhost
 REDIS_PORT=6379
 QDRANT_URL=http://localhost:6333
-QDRANT_COLLECTION=enterprise_knowledge_base_hybrid_v1
 
-# --- Langfuse ---
-LANGFUSE_PUBLIC_KEY=pk-lf-xxxxxxxx  # 刚才在网页生成的
-LANGFUSE_SECRET_KEY=sk-lf-xxxxxxxx
-LANGFUSE_HOST=http://localhost:3333
-第五步：启动后端服务
-Bash
+```
 
-# 确保在 backend 目录下
+### 7. 启动服务
+
+```bash
+# 启动 FastAPI (自动重载模式)
 python -m app.main
-如果看到以下日志，说明启动成功：
 
-Plaintext
+```
 
-🚀 服务正在启动...
-✅ MySQL 表结构已同步
-INFO:     Uvicorn running on http://0.0.0.0:8000
-🕹️ 使用指南
-API 文档
-启动后访问：http://localhost:8000/docs
+若看到 `🚀 服务正在启动...` 和 `✅ MySQL 表结构已同步`，即代表启动成功。
+API 文档地址：http://localhost:8000/docs
 
-核心接口
-/api/chat (POST): 智能对话接口，支持 Session 上下文。
+---
 
-/api/upload (POST): 上传 PDF/Word 文档，后台自动向量化。
+## 📂 目录结构说明
 
-/api/feedback (POST): 用户点赞/点踩反馈。
+```plaintext
+project_root/
+├── app/
+│   ├── api/             # 路由定义 (chat, upload, feedback)
+│   ├── core/            # 核心配置 (config, prompts, database)
+│   ├── services/        # 业务逻辑 (rag_engine, file_service, llm_factory)
+│   ├── tools/           # Agent 工具 (policy_tool, sql_tool)
+│   ├── utils/           # 通用工具
+│   └── main.py          # 程序入口
+├── models/              # 本地模型存放目录
+├── smart_doc_chat_docker/ # Docker 编排文件
+└── requirements.txt     # Python 依赖
 
-❓ 常见问题排查 (Troubleshooting)
-Q1: 启动报错 bind: address already in use?
+```
 
-检查本地是否运行了 MySQL (3306) 或其他 Docker 容器。如果是 MySQL 冲突，请确保 .env 里配置的是映射端口 3307。
+## 📝 开发指南
 
-Q2: 报错 Unrecognized model in ...?
+### 添加新知识库文件
 
-模型下载不完整。请删除 models/ 下对应文件夹，使用 huggingface-cli 重新下载，务必加上 --local-dir-use-symlinks False。
+通过 API `/api/upload` 上传 PDF/Word 文件。后台 `file_service` 会自动进行：
 
-Q3: Langfuse 报错 500?
+1. 解析文件
+2. 文本分块 (SentenceSplitter)
+3. 向量化 (BGE-Large)
+4. 存入 Qdrant
 
-检查 Langfuse 是否有 Prompt。
+### 修改图表输出逻辑
 
-检查 Python 代码中的 LANGFUSE_PUBLIC_KEY 是否正确。
+如果需要调整图表生成的判断逻辑，请前往 Langfuse 修改 `tool-sql-result-instruction` 提示词，无需修改代码。
 
-📦 附录：requirements.txt (参考)
-Plaintext
+### 常见问题 (FAQ)
 
-fastapi
-uvicorn
-python-dotenv
-sqlalchemy
-aiomysql
-redis
-qdrant-client
-llama-index-core
-llama-index-embeddings-huggingface
-llama-index-vector-stores-qdrant
-llama-index-llms-dashscope
-llama-index-postprocessor-flag-embedding-reranker
-langchain
-langchain-openai
-langchain-core
-langfuse
-dashscope
-transformers
-torch
-python-multipart
+**Q: 启动时报错 `ValueError: Model path ... not found`?**
+A: 请检查步骤 5 中的模型是否完整下载，且路径与 `app/core/config.py` 中的 `EMBEDDING_MODEL_PATH` 完全一致。
+
+**Q: Langfuse 连接失败?**
+A: 确保 Docker 容器 `langfuse-web` 已启动，且 `.env` 中的 `LANGFUSE_HOST` 没有多余的斜杠（应为 `http://localhost:3333`）。
+
+**Q: SQL 工具不执行?**
+A: 检查 `app/core/prompts.py` 中的 Schema 定义是否与数据库实际表结构一致。目前仅支持查询 `feedbacks` 表。
