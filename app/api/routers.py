@@ -13,6 +13,7 @@ from app.utils.database import get_db
 from app.core.redis import redis_manager
 from app.services.llm_factory import ModelFactory
 from app.services.file_service import handle_file_upload
+from app.services.query_rewriter import condense_question
 from app.core.models import Feedback  # 👈 假设你移动了 models.py
 from app.core.prompts import DB_SCHEMA_TEXT, CORE_SYSTEM_PROMPT # 👈 假设你移动了 prompts.py
 
@@ -30,7 +31,7 @@ from app.tools.sql_tool import query_business_data
 import os
 from dotenv import load_dotenv
 load_dotenv()
-print("Host:=========================", os.environ.get("LANGFUSE_HOST"))
+
 
 router = APIRouter()
 # langfuse = Langfuse()
@@ -63,6 +64,11 @@ async def chat_endpoint(
     history_dicts: List[dict] = Depends(get_chat_history_dep)
 ):
     print(f"🔔 新请求 Session ID: {x_session_id}, 历史消息数: {len(history_dicts)}")
+
+  
+    # 0. 查询改写 
+    # 将改写后的问题用于 Agent 推理，但历史记录中仍保存用户原话
+    final_query = condense_question(history_dicts, request.message)
     # 1. 准备工具和模型
     tools = [lookup_policy_doc, query_business_data]
     llm = ModelFactory.get_llm()
@@ -106,7 +112,7 @@ async def chat_endpoint(
         
         try:
             async for event in agent_executor.astream_events(
-                {"input": request.message, "chat_history": lc_history},
+                {"input": final_query, "chat_history": lc_history},
                 version="v1",
                 config={
                     "callbacks": [langfuse_handler],
