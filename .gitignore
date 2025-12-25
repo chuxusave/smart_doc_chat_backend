@@ -71,6 +71,8 @@ build/
 dist/
 
 # 其他自定义忽略项
+# evaluation/
+smart_doc_chat_docker/langfuse_db
 smart_doc_chat_docker/langfuse_db_data
 storage/
 coverage/

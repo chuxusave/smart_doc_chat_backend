@@ -142,6 +142,7 @@ async def chat_endpoint(
                                 # 解析 JSON
                                 output_json = json.loads(clean_str)
                                 
+                                # 提取给前端看的 sources
                                 if isinstance(output_json, dict) and "sources" in output_json:
                                     captured_sources = output_json["sources"]
                                     print(f"✅ 捕获到 Sources: {len(captured_sources)} 个")
@@ -163,8 +164,7 @@ async def chat_endpoint(
             if captured_sources:
                 # 按照前端协议：换行 + __SOURCES__ + 换行 + JSON
                 sources_payload = json.dumps(captured_sources, ensure_ascii=False)
-                yield f"\n\n__SOURCES__\n{sources_payload}"
-
+                yield f"\n\n__SOURCES__\n{sources_payload}"         
             # 6. 保存历史到 Redis
             if full_response:
                 new_history = history_dicts + [
